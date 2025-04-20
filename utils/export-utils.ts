@@ -30,10 +30,11 @@ export function formatExpensesAsCSV(expenses: Expense[], currentCurrency: string
 
   // Add each expense as a row
   sortedExpenses.forEach((expense) => {
+    // Use the same date/time formatting as in the PDF export
     const date = formatDate(expense.timestamp)
-    const time = new Date(expense.timestamp).toLocaleTimeString()
+    const time = new Date(expense.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     const category = expense.category || "Other"
-    const amount = `${getCurrencySymbol(currentCurrency)}${expense.amount.toFixed(2)}`
+    const amount = formatAmount(expense.amount, currentCurrency)
     const note = expense.note || ""
 
     // Escape notes that might contain commas
@@ -92,11 +93,6 @@ export function generateExpensesPDF(
   // Document margins
   const margin = 15
   
-  // Currency formatting function - handles different currency symbols
-  const formatAmount = (amount: number): string => {
-    return `${getCurrencySymbol(currentCurrency)} ${amount.toFixed(2)}`
-  }
-  
   // ===== HEADER SECTION =====
   
   // Create header with brand color
@@ -142,9 +138,9 @@ export function generateExpensesPDF(
     margin: { left: margin, right: margin },
     head: [["Period", "Total Amount"]],
     body: [
-      ["Daily", formatAmount(dailyTotal)],
-      ["Weekly", formatAmount(weeklyTotal)],
-      ["Monthly", formatAmount(monthlyTotal)],
+      ["Daily", formatAmount(dailyTotal, currentCurrency)],
+      ["Weekly", formatAmount(weeklyTotal, currentCurrency)],
+      ["Monthly", formatAmount(monthlyTotal, currentCurrency)],
     ],
     theme: "grid",
     headStyles: { 
@@ -185,7 +181,7 @@ export function generateExpensesPDF(
   // Prepare category data
   const categoryTableData = categoryData.map((category) => [
     category.name,
-    formatAmount(category.value),
+    formatAmount(category.value, currentCurrency),
     `${category.percentage.toFixed(1)}%`,
   ])
 
@@ -261,7 +257,7 @@ export function generateExpensesPDF(
       formatDate(expense.timestamp),
       new Date(expense.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       expense.category || "Other",
-      formatAmount(expense.amount),
+      formatAmount(expense.amount, currentCurrency),
       (expense.note || "").substring(0, 25) + ((expense.note || "").length > 25 ? "..." : ""),
     ])
 
@@ -335,6 +331,14 @@ export function generateExpensesPDF(
   // Generate date-based filename
   const timestamp = new Date().toISOString().substring(0, 10)
   doc.save(`spenders-report-${timestamp}.pdf`)
+}
+
+/**
+ * Format amount with appropriate currency symbol
+ * Used by both CSV and PDF exports for consistency
+ */
+function formatAmount(amount: number, currencyCode: string): string {
+  return `${getCurrencySymbol(currencyCode)} ${amount.toFixed(2)}`;
 }
 
 /**
