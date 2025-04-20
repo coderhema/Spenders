@@ -41,4 +41,4 @@ Spenders makes it easy to track your expenses, monitor your budget, and gain ins
 
 ## License
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![License](https://img.shields.io/badge/license-GNUPL-blue)
+![License](https://img.shields.io/badge/license-AGPL_3.0-blue)
