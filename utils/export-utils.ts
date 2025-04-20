@@ -33,7 +33,7 @@ export function formatExpensesAsCSV(expenses: Expense[], currentCurrency: string
     const date = formatDate(expense.timestamp)
     const time = new Date(expense.timestamp).toLocaleTimeString()
     const category = expense.category || "Other"
-    const amount = `${currentCurrency}${expense.amount.toFixed(2)}`
+    const amount = `${getCurrencySymbol(currentCurrency)}${expense.amount.toFixed(2)}`
     const note = expense.note || ""
 
     // Escape notes that might contain commas
