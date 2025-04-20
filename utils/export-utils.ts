@@ -19,9 +19,8 @@ interface CategoryDataItem {
 
 // Format expenses data as CSV
 export function formatExpensesAsCSV(expenses: Expense[], currentCurrency: string): string {
-  const today = new Date().toISOString().split('T')[0]
-  let csv = `Spenders Expense Report - ${today}\n`
-  csv += "Date,Time,Category,Amount,Note\n"
+  // CSV header
+  let csv = "Date,Time,Category,Amount,Note\n"
 
   // Sort expenses by date (newest first)
   const sortedExpenses = [...expenses].sort((a, b) => b.timestamp - a.timestamp)
@@ -71,22 +70,17 @@ export function generateExpensesPDF(
   categoryData: CategoryDataItem[],
   currentTheme: any,
 ): void {
-  // Create new PDF document with font embedding enabled
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-    putOnlyUsedFonts: true
-  })
+  // Create new PDF document (using A4 format)
+  const doc = new jsPDF()
   
-  // Add standardized fonts that work everywhere
-  doc.setFont("helvetica", "normal")
+  // Add standard font to avoid text rendering issues
+  doc.setFont("helvetica")
   
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   
   // Define colors for consistent styling
-  const primaryColor = [20, 120, 80] // Default to green if theme color can't be determined
+  const primaryColor = getThemeColor(currentTheme.text.primary) || [20, 120, 80]
   
   // Document margins
   const margin = 15
@@ -96,7 +90,7 @@ export function generateExpensesPDF(
   doc.rect(0, 0, pageWidth, 40, 'F')
   
   // Add accent stripe
-  doc.setFillColor(10, 90, 60)
+  doc.setFillColor(primaryColor[0] * 0.7, primaryColor[1] * 0.7, primaryColor[2] * 0.7)
   doc.rect(0, 40, pageWidth, 4, 'F')
   
   // Add title with larger text
@@ -104,18 +98,20 @@ export function generateExpensesPDF(
   doc.setTextColor(255, 255, 255)
   doc.text("Expense Report", margin, 25)
 
-  // Add Spenders text in top right (replacing the gibberish)
-  doc.setFontSize(20)
-  doc.setFont("helvetica", "bold")
+  // Add Spenders logo text in top right (fixing the gibberish)
+  doc.setFontSize(18)
   doc.setTextColor(255, 255, 255)
   doc.text("Spenders", pageWidth - margin, 25, { align: "right" })
-  doc.setFont("helvetica", "normal")
 
-  // Add date in header
+  // Add date in header with proper spacing
   doc.setFontSize(11)
   doc.setTextColor(255, 255, 255)
   const today = new Date()
-  const formattedDate = formatDate(today.getTime())
+  const formattedDate = today.toLocaleDateString(undefined, { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
   doc.text(`Generated: ${formattedDate}`, margin, 35)
   
   // Add more space between sections
@@ -130,9 +126,8 @@ export function generateExpensesPDF(
   doc.setDrawColor(220, 220, 220)
   doc.line(margin, yPosition + 5, pageWidth - margin, yPosition + 5)
   
-  // Format currency values consistently
+  // Format currency values to ensure they display correctly
   const formatAmount = (amount: number): string => {
-    // Use standard dollar sign instead of special currency characters
     return `${currentCurrency} ${amount.toFixed(2)}`
   }
   
@@ -160,12 +155,11 @@ export function generateExpensesPDF(
     styles: { 
       fontSize: 12,
       cellPadding: 6,
-      font: "helvetica",
-      fontStyle: "normal"
+      font: "helvetica"
     },
     columnStyles: {
-      0: { fontStyle: 'bold', halign: "left", cellWidth: 60 },
-      1: { halign: "right", cellWidth: 80 },
+      0: { fontStyle: 'bold', halign: "left" },
+      1: { halign: "right" },
     },
     tableWidth: 'auto',
   })
@@ -192,7 +186,7 @@ export function generateExpensesPDF(
     `${category.percentage.toFixed(1)}%`,
   ])
 
-  // Fix the category breakdown table with proper column widths
+  // Category breakdown table - fixing the "Percentage" column width issue
   autoTable(doc, {
     startY: yPosition,
     margin: { left: margin, right: margin },
@@ -202,23 +196,21 @@ export function generateExpensesPDF(
     headStyles: { 
       fillColor: primaryColor, 
       textColor: [255, 255, 255],
-      fontStyle: 'bold', 
+      fontStyle: 'bold',
       fontSize: 13,
       cellPadding: 8,
-      minCellWidth: 40
+      minCellWidth: 40 // Ensure minimum width for all header cells
     },
     styles: { 
       fontSize: 12,
       cellPadding: 6,
       lineColor: [230, 230, 230],
-      font: "helvetica",
-      fontStyle: "normal",
-      halign: "left"
+      font: "helvetica"
     },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 80 },
-      1: { halign: "right", cellWidth: 60 },
-      2: { halign: "right", cellWidth: 60 }, // Wide enough for "Percentage"
+      0: { halign: "left", fontStyle: 'bold', cellWidth: "auto" },
+      1: { halign: "right", cellWidth: 70 },
+      2: { halign: "right", cellWidth: 70 }, // Increased width to prevent wrapping
     },
     alternateRowStyles: {
       fillColor: [248, 248, 248]
@@ -251,9 +243,7 @@ export function generateExpensesPDF(
     doc.setFontSize(16)
     doc.setTextColor(255, 255, 255)
     doc.text("Expense Report", margin, 17)
-    doc.setFont("helvetica", "bold")
     doc.text("Spenders", pageWidth - margin, 17, { align: "right" })
-    doc.setFont("helvetica", "normal")
     
     transactionsY = 40
   }
@@ -283,21 +273,20 @@ export function generateExpensesPDF(
       fontStyle: 'bold',
       fontSize: 13,
       cellPadding: 8,
-      minCellWidth: 40
+      minCellWidth: 30 // Ensure minimum width for all header cells
     },
     styles: { 
       fontSize: 11,
       cellPadding: 6,
       lineColor: [230, 230, 230],
       font: "helvetica",
-      fontStyle: "normal",
       overflow: 'ellipsize'
     },
     columnStyles: {
-      0: { halign: "left", cellWidth: 35, fontStyle: 'bold' },
-      1: { halign: "center", cellWidth: 35 },
-      2: { halign: "left", cellWidth: 50 },
-      3: { halign: "right", cellWidth: 50, fontStyle: 'bold' },
+      0: { halign: "left", cellWidth: 35, fontStyle: 'bold' }, // Increased date width
+      1: { halign: "center", cellWidth: 35 }, // Increased time width
+      2: { halign: "left", cellWidth: 45 },
+      3: { halign: "right", cellWidth: 45, fontStyle: 'bold' }, 
       4: { halign: "left", cellWidth: "auto" },
     },
     alternateRowStyles: {
@@ -312,9 +301,7 @@ export function generateExpensesPDF(
         doc.setFontSize(16)
         doc.setTextColor(255, 255, 255)
         doc.text("Expense Report", margin, 17)
-        doc.setFont("helvetica", "bold")
         doc.text("Spenders", pageWidth - margin, 17, { align: "right" })
-        doc.setFont("helvetica", "normal")
       }
     }
   })
@@ -342,4 +329,18 @@ export function generateExpensesPDF(
   // Generate date-based filename with timestamp
   const timestamp = new Date().toISOString().substring(0, 10)
   doc.save(`spenders-report-${timestamp}.pdf`)
+}
+
+// Helper to extract RGB values from theme color strings
+function getThemeColor(colorClass: string): number[] | null {
+  // Default fallbacks for common theme colors
+  if (colorClass.includes('green')) return [20, 120, 80]
+  if (colorClass.includes('blue')) return [59, 130, 246]
+  if (colorClass.includes('purple')) return [147, 51, 234]
+  if (colorClass.includes('gray')) return [100, 116, 139]
+  if (colorClass.includes('red')) return [220, 38, 38]
+  if (colorClass.includes('orange')) return [249, 115, 22]
+  
+  // Default primary color if nothing matches
+  return [20, 120, 80]
 }
