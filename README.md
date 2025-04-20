@@ -18,5 +18,27 @@ Spenders makes it easy to track your expenses, monitor your budget, and gain ins
    ```bash
    git clone https://github.com/coderhema/Spenders.git
 
+2. Navigate into the project directory:
+   ```bash
+   cd Spenders
+
+3. Install the dependencies:
+   ```bash
+   npm install
+   
+4. Start the development server:
+   ```bash
+   npm run dev
+
+5. Open your browser and visit:
+   ```bash
+   http://localhost:3000
+   
+## To contribute
+1. Raise an Issue
+
+2. Create a PR
+
 ## License
-AGNUPL
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![License](https://img.shields.io/badge/license-GNUPL-blue)
