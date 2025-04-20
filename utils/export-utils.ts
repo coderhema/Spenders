@@ -19,8 +19,9 @@ interface CategoryDataItem {
 
 // Format expenses data as CSV
 export function formatExpensesAsCSV(expenses: Expense[], currentCurrency: string): string {
-  // CSV header
-  let csv = "Date,Time,Category,Amount,Note\n"
+  const today = new Date().toISOString().split('T')[0]
+  let csv = `Spenders Expense Report - ${today}\n`
+  csv += "Date,Time,Category,Amount,Note\n"
 
   // Sort expenses by date (newest first)
   const sortedExpenses = [...expenses].sort((a, b) => b.timestamp - a.timestamp)
@@ -70,11 +71,13 @@ export function generateExpensesPDF(
   categoryData: CategoryDataItem[],
   currentTheme: any,
 ): void {
-  // Create new PDF document (using A4 format)
+  // Create new PDF document
   const doc = new jsPDF()
   
-  // Add standard font to avoid text rendering issues
-  doc.setFont("helvetica")
+  // Add standard font to ensure currency symbols display correctly
+  // If you've added a custom font via the font converter as mentioned below, use:
+  // doc.addFont('path/to/your/converted-font.js', 'YourFontName', 'normal');
+  // doc.setFont('YourFontName');
   
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -98,12 +101,12 @@ export function generateExpensesPDF(
   doc.setTextColor(255, 255, 255)
   doc.text("Expense Report", margin, 25)
 
-  // Add Spenders logo text in top right (fixing the gibberish)
+  // Add "Spenders" text (instead of the gibberish Ø=U°)
   doc.setFontSize(18)
   doc.setTextColor(255, 255, 255)
   doc.text("Spenders", pageWidth - margin, 25, { align: "right" })
 
-  // Add date in header with proper spacing
+  // Add date in header
   doc.setFontSize(11)
   doc.setTextColor(255, 255, 255)
   const today = new Date()
@@ -114,10 +117,9 @@ export function generateExpensesPDF(
   })
   doc.text(`Generated: ${formattedDate}`, margin, 35)
   
-  // Add more space between sections
   let yPosition = 65
   
-  // Add summary section with enhanced style
+  // Add summary section
   doc.setFontSize(18)
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
   doc.text("Expense Summary", margin, yPosition)
@@ -126,23 +128,33 @@ export function generateExpensesPDF(
   doc.setDrawColor(220, 220, 220)
   doc.line(margin, yPosition + 5, pageWidth - margin, yPosition + 5)
   
-  // Format currency values to ensure they display correctly
-  const formatAmount = (amount: number): string => {
-    return `${currentCurrency} ${amount.toFixed(2)}`
+  // Safe currency formatting - convert symbols to text codes if needed
+  const safeFormatAmount = (amount: number): string => {
+    // For standard PDF fonts, use currency code instead of symbol
+    const currencyMap: {[key: string]: string} = {
+      '£': 'GBP ',
+      '¥': 'JPY ',
+      '$': 'USD ',
+      '€': 'EUR ',
+      '₦': 'NGN ',
+      // Add other currency mappings as needed
+    };
+    
+    const currencyCode = currencyMap[currentCurrency] || `${currentCurrency} `;
+    return `${currencyCode}${amount.toFixed(2)}`;
   }
   
-  // Add more space before table
   yPosition += 15
   
-  // Summary table with larger text and better spacing
+  // Summary table with adequate column widths
   autoTable(doc, {
     startY: yPosition,
     margin: { left: margin, right: margin },
     head: [["Period", "Total"]],
     body: [
-      ["Daily", formatAmount(dailyTotal)],
-      ["Weekly", formatAmount(weeklyTotal)],
-      ["Monthly", formatAmount(monthlyTotal)],
+      ["Daily", safeFormatAmount(dailyTotal)],
+      ["Weekly", safeFormatAmount(weeklyTotal)],
+      ["Monthly", safeFormatAmount(monthlyTotal)],
     ],
     theme: "grid",
     headStyles: { 
@@ -155,19 +167,16 @@ export function generateExpensesPDF(
     styles: { 
       fontSize: 12,
       cellPadding: 6,
-      font: "helvetica"
     },
     columnStyles: {
-      0: { fontStyle: 'bold', halign: "left" },
-      1: { halign: "right" },
+      0: { fontStyle: 'bold', halign: "left", cellWidth: 60 },
+      1: { halign: "right", cellWidth: 100 }, // Wider for currency
     },
-    tableWidth: 'auto',
   })
   
-  // Add more space between sections
   yPosition = doc.lastAutoTable.finalY + 30
   
-  // Category breakdown section header
+  // Category breakdown section
   doc.setFontSize(18)
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
   doc.text("Category Breakdown", margin, yPosition)
@@ -176,21 +185,20 @@ export function generateExpensesPDF(
   doc.setDrawColor(220, 220, 220)
   doc.line(margin, yPosition + 5, pageWidth - margin, yPosition + 5)
   
-  // Add more space before table
   yPosition += 15
 
   // Prepare category data for table
   const categoryTableData = categoryData.map((category) => [
     category.name,
-    formatAmount(category.value),
+    safeFormatAmount(category.value),
     `${category.percentage.toFixed(1)}%`,
   ])
 
-  // Category breakdown table - fixing the "Percentage" column width issue
+  // Category breakdown table with fixed column widths
   autoTable(doc, {
     startY: yPosition,
     margin: { left: margin, right: margin },
-    head: [["Category", "Amount", "Percentage"]],
+    head: [["Category", "Amount", "Percentage"]], // Fixed header text
     body: categoryTableData,
     theme: "grid",
     headStyles: { 
@@ -199,18 +207,17 @@ export function generateExpensesPDF(
       fontStyle: 'bold',
       fontSize: 13,
       cellPadding: 8,
-      minCellWidth: 40 // Ensure minimum width for all header cells
+      minCellWidth: 60 // Prevent column header text wrapping
     },
     styles: { 
       fontSize: 12,
       cellPadding: 6,
       lineColor: [230, 230, 230],
-      font: "helvetica"
     },
     columnStyles: {
-      0: { halign: "left", fontStyle: 'bold', cellWidth: "auto" },
+      0: { fontStyle: 'bold', halign: "left", cellWidth: 80 },
       1: { halign: "right", cellWidth: 70 },
-      2: { halign: "right", cellWidth: 70 }, // Increased width to prevent wrapping
+      2: { halign: "right", cellWidth: 70 }, // Wider to prevent "Percentage" breaking
     },
     alternateRowStyles: {
       fillColor: [248, 248, 248]
@@ -220,14 +227,14 @@ export function generateExpensesPDF(
   // Sort expenses by date (newest first)
   const sortedExpenses = [...expenses].sort((a, b) => b.timestamp - a.timestamp)
 
-  // Prepare expense data for table - Limit to 20 most recent for readability
+  // Prepare expense data for table
   const expenseTableData = sortedExpenses
     .slice(0, 20)
     .map((expense) => [
       formatDate(expense.timestamp),
       new Date(expense.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       expense.category || "Other",
-      formatAmount(expense.amount),
+      safeFormatAmount(expense.amount),
       (expense.note || "").substring(0, 25) + ((expense.note || "").length > 25 ? "..." : ""),
     ])
 
@@ -257,7 +264,6 @@ export function generateExpensesPDF(
   doc.setDrawColor(220, 220, 220)
   doc.line(margin, transactionsY + 5, pageWidth - margin, transactionsY + 5)
   
-  // Add more space before table
   transactionsY += 15
 
   // Recent transactions table with improved column widths
@@ -273,20 +279,19 @@ export function generateExpensesPDF(
       fontStyle: 'bold',
       fontSize: 13,
       cellPadding: 8,
-      minCellWidth: 30 // Ensure minimum width for all header cells
+      minCellWidth: 35 // Ensure minimum width for all header cells
     },
     styles: { 
       fontSize: 11,
       cellPadding: 6,
       lineColor: [230, 230, 230],
-      font: "helvetica",
       overflow: 'ellipsize'
     },
     columnStyles: {
-      0: { halign: "left", cellWidth: 35, fontStyle: 'bold' }, // Increased date width
-      1: { halign: "center", cellWidth: 35 }, // Increased time width
-      2: { halign: "left", cellWidth: 45 },
-      3: { halign: "right", cellWidth: 45, fontStyle: 'bold' }, 
+      0: { halign: "left", cellWidth: 35, fontStyle: 'bold' }, // Wider date column
+      1: { halign: "center", cellWidth: 35 }, // Wider time column
+      2: { halign: "left", cellWidth: 50 }, // Wider category column
+      3: { halign: "right", cellWidth: 60, fontStyle: 'bold' }, // Wider amount column for currency
       4: { halign: "left", cellWidth: "auto" },
     },
     alternateRowStyles: {
