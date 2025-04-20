@@ -44,11 +44,16 @@ export function formatExpensesAsCSV(expenses: Expense[], currentCurrency: string
 
 // Download data as CSV file
 export function downloadCSV(data: string, filename: string): void {
+  // Add current date to filename
+  const today = new Date()
+  const dateStr = today.toISOString().split('T')[0] // YYYY-MM-DD format
+  const filenameWithDate = `${filename.split('.')[0]}-${dateStr}.csv`
+  
   const blob = new Blob([data], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.setAttribute("href", url)
-  link.setAttribute("download", filename)
+  link.setAttribute("download", filenameWithDate)
   link.style.visibility = "hidden"
   document.body.appendChild(link)
   link.click()
@@ -85,7 +90,7 @@ export function generateExpensesPDF(
   doc.rect(0, 0, pageWidth, 40, 'F')
   
   // Add accent stripe
-  doc.setFillColor(10, 90, 60)
+  doc.setFillColor(primaryColor[0] * 0.7, primaryColor[1] * 0.7, primaryColor[2] * 0.7)
   doc.rect(0, 40, pageWidth, 4, 'F')
   
   // Add title with larger text
@@ -93,12 +98,12 @@ export function generateExpensesPDF(
   doc.setTextColor(255, 255, 255)
   doc.text("Expense Report", margin, 25)
 
-  // Add Spenders text in top right (replacing the gibberish)
-  doc.setFontSize(16)
+  // Add Spenders logo text in top right (fixing the gibberish)
+  doc.setFontSize(18)
   doc.setTextColor(255, 255, 255)
   doc.text("Spenders", pageWidth - margin, 25, { align: "right" })
 
-  // Add date in header
+  // Add date in header with proper spacing
   doc.setFontSize(11)
   doc.setTextColor(255, 255, 255)
   const today = new Date()
@@ -181,7 +186,7 @@ export function generateExpensesPDF(
     `${category.percentage.toFixed(1)}%`,
   ])
 
-  // Category breakdown table with fixed column widths to prevent text wrapping
+  // Category breakdown table - fixing the "Percentage" column width issue
   autoTable(doc, {
     startY: yPosition,
     margin: { left: margin, right: margin },
@@ -193,7 +198,8 @@ export function generateExpensesPDF(
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 13,
-      cellPadding: 8
+      cellPadding: 8,
+      minCellWidth: 40 // Ensure minimum width for all header cells
     },
     styles: { 
       fontSize: 12,
@@ -204,7 +210,7 @@ export function generateExpensesPDF(
     columnStyles: {
       0: { halign: "left", fontStyle: 'bold', cellWidth: "auto" },
       1: { halign: "right", cellWidth: 70 },
-      2: { halign: "right", cellWidth: 60 },
+      2: { halign: "right", cellWidth: 70 }, // Increased width to prevent wrapping
     },
     alternateRowStyles: {
       fillColor: [248, 248, 248]
@@ -266,7 +272,8 @@ export function generateExpensesPDF(
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 13,
-      cellPadding: 8
+      cellPadding: 8,
+      minCellWidth: 30 // Ensure minimum width for all header cells
     },
     styles: { 
       fontSize: 11,
@@ -276,8 +283,8 @@ export function generateExpensesPDF(
       overflow: 'ellipsize'
     },
     columnStyles: {
-      0: { halign: "left", cellWidth: 30, fontStyle: 'bold' },
-      1: { halign: "center", cellWidth: 30 },
+      0: { halign: "left", cellWidth: 35, fontStyle: 'bold' }, // Increased date width
+      1: { halign: "center", cellWidth: 35 }, // Increased time width
       2: { halign: "left", cellWidth: 45 },
       3: { halign: "right", cellWidth: 45, fontStyle: 'bold' }, 
       4: { halign: "left", cellWidth: "auto" },
