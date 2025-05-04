@@ -37,7 +37,7 @@ const DEFAULT_CATEGORIES = [
   { id: "entertainment", name: "Entertainment" },
   { id: "utilities", name: "Bills & Utilities" },
   { id: "health", name: "Health" },
-  { id: "other", name: "Other" },
+  { id: "other", name: "Other (Custom)" },
 ]
 
 interface BudgetGoalsProps {
@@ -54,13 +54,23 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
   // Form state
   const [category, setCategory] = useState<string>("food")
+  const [customCategory, setCustomCategory] = useState<string>("")
   const [amount, setAmount] = useState<string>("")
   const [period, setPeriod] = useState<BudgetPeriod>("monthly")
   const [formError, setFormError] = useState<string>("")
+  const [showCustomCategory, setShowCustomCategory] = useState<boolean>(false)
 
   useEffect(() => {
     loadBudgetGoals()
   }, [])
+
+  // When category changes, check if it's "other" to show custom input
+  useEffect(() => {
+    setShowCustomCategory(category === "other")
+    if (category !== "other") {
+      setCustomCategory("")
+    }
+  }, [category])
 
   const loadBudgetGoals = async () => {
     try {
@@ -139,6 +149,12 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
       return
     }
 
+    // Validate custom category if "other" is selected
+    if (category === "other" && !customCategory.trim()) {
+      setFormError("Please enter a custom category name")
+      return
+    }
+
     const amountValue = Number.parseFloat(amount)
     if (isNaN(amountValue) || amountValue <= 0) {
       setFormError("Please enter a valid amount")
@@ -152,19 +168,22 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
     setFormError("")
 
+    // Determine the final category to use
+    const finalCategory = category === "other" ? customCategory.trim().toLowerCase() : category
+
     try {
       // Create or update budget goal
       const goal: BudgetGoal = editingGoal
         ? {
             ...editingGoal,
-            category,
+            category: finalCategory,
             amount: amountValue,
             period,
             updatedAt: Date.now(),
           }
         : {
             id: crypto.randomUUID(),
-            category,
+            category: finalCategory,
             amount: amountValue,
             period,
             createdAt: Date.now(),
@@ -189,7 +208,20 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
   const handleEdit = (goal: BudgetGoal) => {
     setEditingGoal(goal)
-    setCategory(goal.category)
+
+    // Check if this is a custom category
+    const isCustomCategory = !DEFAULT_CATEGORIES.some((cat) => cat.id === goal.category && cat.id !== "other")
+
+    if (isCustomCategory) {
+      setCategory("other")
+      setCustomCategory(goal.category)
+      setShowCustomCategory(true)
+    } else {
+      setCategory(goal.category)
+      setCustomCategory("")
+      setShowCustomCategory(false)
+    }
+
     setAmount(goal.amount.toString())
     setPeriod(goal.period)
     setIsDialogOpen(true)
@@ -211,6 +243,8 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
   const resetForm = () => {
     setEditingGoal(null)
     setCategory("food")
+    setCustomCategory("")
+    setShowCustomCategory(false)
     setAmount("")
     setPeriod("monthly")
     setFormError("")
@@ -218,7 +252,7 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
   const getCategoryName = (categoryId: string) => {
     const category = DEFAULT_CATEGORIES.find((c) => c.id === categoryId)
-    return category ? category.name : categoryId
+    return category ? category.name : categoryId.charAt(0).toUpperCase() + categoryId.slice(1)
   }
 
   const getPeriodName = (period: BudgetPeriod) => {
@@ -276,6 +310,19 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
                   </SelectContent>
                 </Select>
               </div>
+
+              {showCustomCategory && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Custom Category Name</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter custom category name"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Amount</label>
                 <Input
@@ -355,9 +402,19 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
                     </p>
                   </div>
                   <div className="text-sm">
-                    <span className="font-medium">{formatCurrency(status.current, 2, currentCurrency).value}</span>
-                    {" / "}
-                    <span>{formatCurrency(status.goal, 2, currentCurrency).value}</span>
+                    <div className="flex items-baseline">
+                      <span className="font-medium">{formatCurrency(status.current, 2, currentCurrency).value}</span>
+                      {formatCurrency(status.current, 2, currentCurrency).suffix && (
+                        <span className="text-xs ml-0.5">
+                          {formatCurrency(status.current, 2, currentCurrency).suffix}
+                        </span>
+                      )}
+                      <span className="mx-1">/</span>
+                      <span>{formatCurrency(status.goal, 2, currentCurrency).value}</span>
+                      {formatCurrency(status.goal, 2, currentCurrency).suffix && (
+                        <span className="text-xs ml-0.5">{formatCurrency(status.goal, 2, currentCurrency).suffix}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">

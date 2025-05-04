@@ -1,67 +1,79 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  BarChart,
-  Bar,
-} from "recharts"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { format, parseISO } from "date-fns"
-import { getAnalyticsData } from "@/utils/vercel-analytics"
+import { getTotalUsers } from "@/utils/vercel-analytics"
+import { Globe, Users, Calendar, Clock } from "lucide-react"
+import { getSetting, saveSetting } from "@/utils/db"
+import { getUserCountryFromIP } from "@/utils/geo-location"
 
 interface UsageAnalyticsProps {
   currentTheme: any
 }
 
-interface UsageData {
-  date: string
-  unique_users: number
-  total_actions: number
-  [key: string]: any
+interface CountryInfo {
+  code: string
+  name: string
+  flag: string
 }
 
 export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
-  const [dailyData, setDailyData] = useState<UsageData[]>([])
-  const [weeklyData, setWeeklyData] = useState<UsageData[]>([])
   const [totalUsers, setTotalUsers] = useState<number>(0)
   const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-  const [viewType, setViewType] = useState<"line" | "bar">("line")
+  const [userCountry, setUserCountry] = useState<CountryInfo>({
+    code: "",
+    name: "Detecting location...",
+    flag: "🌍",
+  })
+  const [startDate, setStartDate] = useState<Date | null>(null)
+  const [daysUsed, setDaysUsed] = useState<number>(0)
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
 
-        // Fetch daily stats using Vercel Analytics
-        const dailyResult = await getAnalyticsData("day", 14)
-        if (dailyResult.success && dailyResult.data) {
-          setDailyData(dailyResult.data)
+        // Get total users count
+        const totalUsersResult = await getTotalUsers()
+        if (totalUsersResult.success) {
+          setTotalUsers(totalUsersResult.total)
         }
 
-        // Fetch weekly stats using Vercel Analytics
-        const weeklyResult = await getAnalyticsData("week", 12)
-        if (weeklyResult.success && weeklyResult.data) {
-          setWeeklyData(weeklyResult.data)
+        // Get user's start date from settings
+        const savedStartDate = await getSetting("startDate", null)
+
+        if (savedStartDate) {
+          // If we have a saved start date, use it
+          const startDateObj = new Date(savedStartDate)
+          setStartDate(startDateObj)
+
+          // Calculate days since start
+          const today = new Date()
+          const diffTime = Math.abs(today.getTime() - startDateObj.getTime())
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          setDaysUsed(diffDays)
+        } else {
+          // If no start date, set today as the start date
+          const today = new Date()
+          await saveSetting("startDate", today.toISOString())
+          setStartDate(today)
+          setDaysUsed(1) // First day of usage
         }
 
-        // Set a reasonable total users count
-        setTotalUsers(
-          dailyResult.success ? dailyResult.data.reduce((max, item) => Math.max(max, item.unique_users), 0) : 0,
-        )
+        // Get saved country from settings first
+        const savedCountry = await getSetting("userCountry", null)
+
+        if (savedCountry) {
+          setUserCountry(savedCountry)
+        } else {
+          // Fetch user's country based on IP using server action
+          const countryInfo = await getUserCountryFromIP()
+          setUserCountry(countryInfo)
+          await saveSetting("userCountry", countryInfo)
+        }
       } catch (err) {
-        console.error("Error fetching analytics data:", err)
-        setError("Failed to load analytics data")
+        console.error("Error fetching user data:", err)
       } finally {
         setLoading(false)
       }
@@ -70,45 +82,15 @@ export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
     fetchData()
   }, [])
 
-  // Custom tooltip for the chart
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div
-          className={`p-3 border rounded-md shadow-lg bg-white border-${currentTheme.text.tertiary.replace("text-", "")}/20`}
-        >
-          <p className={`font-medium ${currentTheme.text.primary}`}>{label}</p>
-          <div className="space-y-1 mt-1">
-            <p className="text-sm flex items-center gap-2">
-              <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
-              <span className="font-semibold">Users: {payload[0].value}</span>
-            </p>
-            <p className="text-sm flex items-center gap-2">
-              <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>
-              <span className="font-semibold">Actions: {payload[1].value}</span>
-            </p>
-          </div>
-        </div>
-      )
-    }
-    return null
-  }
-
   if (loading) {
     return (
       <Card className="p-6 space-y-4">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[300px] w-full" />
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card className="p-6">
-        <div className="text-center py-8">
-          <p className="text-red-500">{error}</p>
-          <p className="text-sm text-gray-500 mt-2">Please try again later</p>
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       </Card>
     )
@@ -116,192 +98,138 @@ export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
 
   return (
     <Card className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className={`text-xl font-bold ${currentTheme.text.primary}`}>Usage Analytics</h2>
-        <div className="flex gap-2">
-          <div className="bg-gray-100 px-3 py-1 rounded-full">
-            <p className="text-sm font-medium">Total Users: {totalUsers}</p>
+      <CardHeader className="px-0 pt-0">
+        <CardTitle className={`text-xl font-bold ${currentTheme.text.primary}`}>Your Usage Statistics</CardTitle>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-500">Total Users</h3>
+              <Users className="h-5 w-5 text-blue-500" />
+            </div>
+            <p className="text-2xl font-bold mt-2">{totalUsers}</p>
+            <p className="text-xs text-gray-500 mt-1">All-time registered users</p>
           </div>
-          <div className="flex">
-            <button
-              className={`px-2 py-1 text-xs rounded-l-md ${viewType === "line" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-              onClick={() => setViewType("line")}
-            >
-              Line
-            </button>
-            <button
-              className={`px-2 py-1 text-xs rounded-r-md ${viewType === "bar" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-              onClick={() => setViewType("bar")}
-            >
-              Bar
-            </button>
+
+          <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-500">Days Active</h3>
+              <Calendar className="h-5 w-5 text-green-500" />
+            </div>
+            <p className="text-2xl font-bold mt-2">{daysUsed}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Since {startDate?.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm col-span-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-500">Your Location</h3>
+              <Globe className="h-5 w-5 text-purple-500" />
+            </div>
+            <div className="flex items-center mt-2">
+              <span className="text-3xl mr-3" role="img" aria-label={`Flag of ${userCountry.name}`}>
+                {userCountry.flag}
+              </span>
+              <div>
+                <p className="font-medium text-lg">{userCountry.name}</p>
+                <p className="text-xs text-gray-500">Detected automatically</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Tabs defaultValue="daily">
-        <TabsList className="mb-4">
-          <TabsTrigger value="daily">Daily</TabsTrigger>
-          <TabsTrigger value="weekly">Weekly</TabsTrigger>
-        </TabsList>
+        <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <Clock className="h-6 w-6 text-blue-500" />
+            <h3 className="font-medium text-lg">Your Spenders Journey</h3>
+          </div>
 
-        <TabsContent value="daily">
-          {dailyData.length > 0 ? (
-            <div className="h-[250px] md:h-[300px] lg:h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                {viewType === "line" ? (
-                  <LineChart data={dailyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => {
-                        if (typeof value === "string") {
-                          // Try to parse the date if it's a string
-                          try {
-                            return format(parseISO(value), "MMM dd")
-                          } catch {
-                            return value
-                          }
-                        }
-                        return value
-                      }}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="unique_users"
-                      name="Users"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="total_actions"
-                      name="Actions"
-                      stroke="#22c55e"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                    />
-                  </LineChart>
-                ) : (
-                  <BarChart data={dailyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => {
-                        if (typeof value === "string") {
-                          try {
-                            return format(parseISO(value), "MMM dd")
-                          } catch {
-                            return value
-                          }
-                        }
-                        return value
-                      }}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar dataKey="unique_users" name="Users" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="total_actions" name="Actions" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-green-600 text-lg">1</span>
+              </div>
+              <div>
+                <h4 className="font-medium">Started tracking expenses</h4>
+                <p className="text-sm text-gray-500">
+                  {startDate?.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <p>No daily data available yet</p>
-              <p className="text-sm mt-2">Start using the app to see analytics</p>
-            </div>
-          )}
-        </TabsContent>
 
-        <TabsContent value="weekly">
-          {weeklyData.length > 0 ? (
-            <div className="h-[250px] md:h-[300px] lg:h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                {viewType === "line" ? (
-                  <LineChart data={weeklyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => {
-                        if (typeof value === "string") {
-                          try {
-                            return format(parseISO(value), "MMM dd")
-                          } catch {
-                            return value
-                          }
-                        }
-                        return value
-                      }}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="unique_users"
-                      name="Users"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="total_actions"
-                      name="Actions"
-                      stroke="#ec4899"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                    />
-                  </LineChart>
-                ) : (
-                  <BarChart data={weeklyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => {
-                        if (typeof value === "string") {
-                          try {
-                            return format(parseISO(value), "MMM dd")
-                          } catch {
-                            return value
-                          }
-                        }
-                        return value
-                      }}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar dataKey="unique_users" name="Users" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="total_actions" name="Actions" fill="#ec4899" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <p>No weekly data available yet</p>
-              <p className="text-sm mt-2">Start using the app to see analytics</p>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+            {daysUsed > 7 && (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-600 text-lg">2</span>
+                </div>
+                <div>
+                  <h4 className="font-medium">Completed first week</h4>
+                  <p className="text-sm text-gray-500">
+                    {new Date(startDate!.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
 
-      <div className="mt-4 text-xs text-gray-400">
-        <p>Data is collected anonymously to improve the app experience</p>
-      </div>
+            {daysUsed > 30 && (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-purple-600 text-lg">3</span>
+                </div>
+                <div>
+                  <h4 className="font-medium">Completed first month</h4>
+                  <p className="text-sm text-gray-500">
+                    {new Date(startDate!.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {daysUsed <= 7 && (
+              <div className="flex items-start gap-3 opacity-50">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-gray-600 text-lg">?</span>
+                </div>
+                <div>
+                  <h4 className="font-medium">Complete your first week</h4>
+                  <p className="text-sm text-gray-500">Keep tracking your expenses to reach this milestone</p>
+                </div>
+              </div>
+            )}
+
+            {daysUsed <= 30 && (
+              <div className="flex items-start gap-3 opacity-50">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-gray-600 text-lg">?</span>
+                </div>
+                <div>
+                  <h4 className="font-medium">Complete your first month</h4>
+                  <p className="text-sm text-gray-500">Keep tracking your expenses to reach this milestone</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 text-xs text-gray-400">
+          <p>Your data is stored locally on your device and not shared with others</p>
+        </div>
+      </CardContent>
     </Card>
   )
 }

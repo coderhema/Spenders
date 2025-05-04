@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, AlertCircle } from "lucide-react"
@@ -17,7 +17,7 @@ const DEFAULT_CATEGORIES = [
   { id: "entertainment", name: "Entertainment" },
   { id: "utilities", name: "Bills & Utilities" },
   { id: "health", name: "Health" },
-  { id: "other", name: "Other" },
+  { id: "other", name: "Other (Custom)" },
 ]
 
 interface ExpenseInputFormProps {
@@ -29,9 +29,19 @@ interface ExpenseInputFormProps {
 export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMoneySound }: ExpenseInputFormProps) {
   const [newAmount, setNewAmount] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("food")
+  const [customCategory, setCustomCategory] = useState("")
   const [note, setNote] = useState("")
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState("")
+  const [showCustomCategory, setShowCustomCategory] = useState(false)
+
+  // When category changes, check if it's "other" to show custom input
+  useEffect(() => {
+    setShowCustomCategory(selectedCategory === "other")
+    if (selectedCategory !== "other") {
+      setCustomCategory("")
+    }
+  }, [selectedCategory])
 
   const handleAddExpense = async () => {
     const amount = Number.parseFloat(newAmount)
@@ -47,15 +57,24 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
       return
     }
 
+    // Validate custom category if "other" is selected
+    if (selectedCategory === "other" && !customCategory.trim()) {
+      setError("Please enter a custom category name")
+      return
+    }
+
     setError("")
     setIsAdding(true)
+
+    // Determine the final category to use
+    const finalCategory = selectedCategory === "other" ? customCategory.trim().toLowerCase() : selectedCategory
 
     // Add new expense with current timestamp and unique ID
     const newExpense = {
       id: crypto.randomUUID(),
       amount,
       timestamp: Date.now(),
-      category: selectedCategory,
+      category: finalCategory,
       note: note.trim() || undefined,
     }
 
@@ -66,19 +85,22 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
       // Reset form
       setNewAmount("")
       setNote("")
+      if (selectedCategory === "other") {
+        setCustomCategory("")
+      }
 
       // Play money sound
       playMoneySound()
 
       // Log expense added event
-      logUserActivity(`expense_added_${selectedCategory}`)
+      logUserActivity(`expense_added_${finalCategory}`)
 
       // Notify parent component
       onExpenseAdded()
 
       // Show toast notification with Sonner
       toast(`${amount.toFixed(2)} added`, {
-        description: `Added to ${selectedCategory}`,
+        description: `Added to ${selectedCategory === "other" ? customCategory : selectedCategory}`,
         position: "bottom-center",
         icon: <span className="text-xl">🫰🏾</span>,
       })
@@ -137,6 +159,18 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
             Add
           </Button>
         </div>
+
+        {showCustomCategory && (
+          <Input
+            type="text"
+            placeholder="Enter custom category name"
+            value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)}
+            className={`rounded-xl ${currentTheme.input.background} ${
+              currentTheme.input.border
+            } ${currentTheme.input.focus} ${currentTheme.input.text} ${currentTheme.input.placeholder}`}
+          />
+        )}
 
         <Input
           type="text"

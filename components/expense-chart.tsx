@@ -53,6 +53,13 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
   const [currentMonthTotal, setCurrentMonthTotal] = useState<number>(0)
   const [previousMonthTotal, setPreviousMonthTotal] = useState<number>(0)
   const [percentChange, setPercentChange] = useState<number>(0)
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  // Chart colors - hardcoded to avoid theme dependency
+  const chartColors = {
+    currentMonth: "#3b82f6", // blue
+    previousMonth: "#f97316", // orange
+  }
 
   // Category colors
   const categoryColors = {
@@ -204,23 +211,27 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
       other: "Other",
     }
 
-    return categories[categoryId] || categoryId
+    return categories[categoryId] || categoryId.charAt(0).toUpperCase() + categoryId.slice(1)
   }
 
-  // Custom tooltip for the chart
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // Custom tooltip for the line chart
+  const CustomLineTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const { value, suffix } = formatCurrency(payload[0].value, 2, currentCurrency)
       return (
-        <div
-          className={`p-3 border rounded-md shadow-lg ${currentTheme.card} border-${currentTheme.text.tertiary.replace("text-", "")}/20`}
-        >
-          <p className={`font-medium ${currentTheme.text.primary}`}>Day {label}</p>
-          <p className={`text-sm ${currentTheme.text.secondary} flex items-center gap-2`}>
-            <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: payload[0].color }}></span>
-            <span className="font-semibold">{value}</span>
-            {suffix && <span className="text-xs">{suffix}</span>}
-          </p>
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-gray-900 mb-1">Day {label}</p>
+          {payload.map((entry: any, index: number) => (
+            <div key={`item-${index}`} className="flex items-center gap-2 mb-1">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.stroke }} />
+              <p className="text-sm">
+                <span className="font-medium">{entry.name}: </span>
+                <span>{formatCurrency(entry.value, 2, currentCurrency).value}</span>
+                {formatCurrency(entry.value, 2, currentCurrency).suffix && (
+                  <span className="text-xs ml-1">{formatCurrency(entry.value, 2, currentCurrency).suffix}</span>
+                )}
+              </p>
+            </div>
+          ))}
         </div>
       )
     }
@@ -228,28 +239,74 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
   }
 
   // Custom tooltip for the donut chart
-  const DonutTooltip = ({ active, payload }: any) => {
+  const CustomDonutTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-      const { value, suffix } = formatCurrency(payload[0].value, 2, currentCurrency)
+      const data = payload[0]
+      const { value, name, payload: originalPayload } = data
+      const percentage = ((value / currentMonthTotal) * 100).toFixed(1)
+
       return (
-        <div
-          className={`p-3 border rounded-md shadow-lg ${currentTheme.card} border-${currentTheme.text.tertiary.replace("text-", "")}/20`}
-        >
-          <p className={`font-medium ${currentTheme.text.primary}`}>{payload[0].name}</p>
-          <div className="flex flex-col gap-1 mt-1">
-            <p className={`text-sm ${currentTheme.text.secondary} flex items-center gap-2`}>
-              <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: payload[0].color }}></span>
-              <span className="font-semibold">{value}</span>
-              {suffix && <span className="text-xs">{suffix}</span>}
-            </p>
-            <p className={`text-xs ${currentTheme.text.tertiary}`}>
-              {((payload[0].value / currentMonthTotal) * 100).toFixed(1)}% of total
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-gray-900 mb-1">{name}</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: originalPayload.color }} />
+            <p className="text-sm">
+              <span className="font-medium">Amount: </span>
+              <span>{formatCurrency(value, 2, currentCurrency).value}</span>
+              {formatCurrency(value, 2, currentCurrency).suffix && (
+                <span className="text-xs ml-1">{formatCurrency(value, 2, currentCurrency).suffix}</span>
+              )}
             </p>
           </div>
+          <p className="text-xs text-gray-500">{percentage}% of total spending</p>
         </div>
       )
     }
     return null
+  }
+
+  // Handle pie sector click
+  const handlePieClick = (data: any, index: number) => {
+    setActiveIndex(index === activeIndex ? null : index)
+
+    toast(`${data.name}: ${formatCurrency(data.value, 2, currentCurrency).value}`, {
+      description: `${((data.value / currentMonthTotal) * 100).toFixed(1)}% of your total spending`,
+      position: "bottom-center",
+      icon: <span className="text-xl">🫰🏾</span>,
+    })
+  }
+
+  // Render active shape for pie chart
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, name, value, percent } = props
+    const { value: formattedValue, suffix } = formatCurrency(value, 2, currentCurrency)
+
+    return (
+      <g>
+        {/* Highlighted sector with stroke */}
+        <path
+          d={`M ${cx},${cy} L ${cx + outerRadius * Math.cos((-startAngle * Math.PI) / 180)},${cy + outerRadius * Math.sin((-startAngle * Math.PI) / 180)} A ${outerRadius},${outerRadius} 0 ${endAngle - startAngle > 180 ? 1 : 0},0 ${cx + outerRadius * Math.cos((-endAngle * Math.PI) / 180)},${cy + outerRadius * Math.sin((-endAngle * Math.PI) / 180)} L ${cx},${cy}`}
+          fill={fill}
+          stroke="#fff"
+          strokeWidth={2}
+        />
+
+        {/* Center text details */}
+        <text x={cx} y={cy - 30} textAnchor="middle" fill="#333" fontSize={14} fontWeight="bold">
+          {name}
+        </text>
+        <text x={cx} y={cy} textAnchor="middle" fill="#333" fontSize={16} fontWeight="bold">
+          {formattedValue}
+          {suffix && suffix}
+        </text>
+        <text x={cx} y={cy + 25} textAnchor="middle" fill="#666" fontSize={14}>
+          {`${(percent * 100).toFixed(1)}%`}
+        </text>
+        <text x={cx} y={cy + 45} textAnchor="middle" fill="#888" fontSize={12}>
+          {`of total spending`}
+        </text>
+      </g>
+    )
   }
 
   if (loading) {
@@ -301,51 +358,15 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
                     label={false}
                     labelLine={false}
                     isAnimationActive={true}
-                    onClick={(data) => {
-                      toast(`${data.name}: ${formatCurrency(data.value, 2, currentCurrency).value}`, {
-                        description: `${((data.value / currentMonthTotal) * 100).toFixed(1)}% of your total spending`,
-                        position: "bottom-center",
-                        icon: <span className="text-xl">🫰🏾</span>,
-                      })
-                    }}
-                    activeShape={(props) => {
-                      const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, name, value, percent } =
-                        props
-                      const { value: formattedValue, suffix } = formatCurrency(value, 2, currentCurrency)
-
-                      return (
-                        <g>
-                          {/* Highlighted sector with stroke */}
-                          <path
-                            d={`M ${cx},${cy} L ${cx + outerRadius * Math.cos((-startAngle * Math.PI) / 180)},${cy + outerRadius * Math.sin((-startAngle * Math.PI) / 180)} A ${outerRadius},${outerRadius} 0 ${endAngle - startAngle > 180 ? 1 : 0},0 ${cx + outerRadius * Math.cos((-endAngle * Math.PI) / 180)},${cy + outerRadius * Math.sin((-endAngle * Math.PI) / 180)} L ${cx},${cy}`}
-                            fill={fill}
-                            stroke="#fff"
-                            strokeWidth={2}
-                          />
-
-                          {/* Center text details */}
-                          <text x={cx} y={cy - 30} textAnchor="middle" fill="#333" fontSize={14} fontWeight="bold">
-                            {name}
-                          </text>
-                          <text x={cx} y={cy} textAnchor="middle" fill="#333" fontSize={16} fontWeight="bold">
-                            {formattedValue}
-                            {suffix && suffix}
-                          </text>
-                          <text x={cx} y={cy + 25} textAnchor="middle" fill="#666" fontSize={14}>
-                            {`${(percent * 100).toFixed(1)}%`}
-                          </text>
-                          <text x={cx} y={cy + 45} textAnchor="middle" fill="#888" fontSize={12}>
-                            {`of total spending`}
-                          </text>
-                        </g>
-                      )
-                    }}
+                    onClick={handlePieClick}
+                    activeIndex={activeIndex !== null ? activeIndex : undefined}
+                    activeShape={renderActiveShape}
                   >
                     {categoryData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip content={<DonutTooltip />} />
+                  <Tooltip content={<CustomDonutTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -365,7 +386,7 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="formattedDate" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomLineTooltip />} />
                   <Legend />
                   {currentMonthData.length > 0 && (
                     <Line
@@ -373,7 +394,7 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
                       data={currentMonthData}
                       dataKey="amount"
                       name={`${getMonthName(new Date())} Spending`}
-                      stroke="#3b82f6"
+                      stroke={chartColors.currentMonth}
                       strokeWidth={3}
                       dot={{ r: 4, strokeWidth: 2 }}
                       activeDot={{ r: 6 }}
@@ -385,7 +406,7 @@ export default function ExpenseChart({ currentTheme, currentCurrency }: ExpenseC
                       data={previousMonthData}
                       dataKey="amount"
                       name={`${getMonthName(new Date(getStartOfPreviousMonth()))} Spending`}
-                      stroke="#f97316"
+                      stroke={chartColors.previousMonth}
                       strokeWidth={3}
                       dot={{ r: 4, strokeWidth: 2 }}
                       activeDot={{ r: 6 }}

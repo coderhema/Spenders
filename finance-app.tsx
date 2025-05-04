@@ -58,6 +58,10 @@ type ThemeColor = {
     text: string
     border: string
   }
+  lineChart: {
+    currentMonth: string
+    previousMonth: string
+  }
 }
 
 // Define available themes
@@ -85,6 +89,10 @@ const themes: ThemeColor[] = [
       text: "#047857",
       border: "#d1fae5",
     },
+    lineChart: {
+      currentMonth: "#3b82f6",
+      previousMonth: "#f97316",
+    },
   },
   {
     name: "Ocean",
@@ -108,6 +116,10 @@ const themes: ThemeColor[] = [
       background: "white",
       text: "#1d4ed8",
       border: "#dbeafe",
+    },
+    lineChart: {
+      currentMonth: "#3b82f6",
+      previousMonth: "#f97316",
     },
   },
   {
@@ -133,6 +145,10 @@ const themes: ThemeColor[] = [
       text: "#7e22ce",
       border: "#f3e8ff",
     },
+    lineChart: {
+      currentMonth: "#3b82f6",
+      previousMonth: "#f97316",
+    },
   },
   {
     name: "Gold",
@@ -157,6 +173,10 @@ const themes: ThemeColor[] = [
       text: "#b45309",
       border: "#fef3c7",
     },
+    lineChart: {
+      currentMonth: "#3b82f6",
+      previousMonth: "#f97316",
+    },
   },
   {
     name: "Teal",
@@ -180,6 +200,10 @@ const themes: ThemeColor[] = [
       background: "white",
       text: "#0f766e",
       border: "#ccfbf1",
+    },
+    lineChart: {
+      currentMonth: "#3b82f6",
+      previousMonth: "#f97316",
     },
   },
 ]
