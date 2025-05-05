@@ -6,18 +6,18 @@ import { Button } from "@/components/ui/button"
 import { PlusCircle, AlertCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { addExpense } from "@/utils/db"
+import { addExpense, getCustomCategories } from "@/utils/db"
 import { logUserActivity } from "@/utils/vercel-analytics"
+import AddCategoryDialog from "./add-category-dialog"
 
 // Default categories
 const DEFAULT_CATEGORIES = [
-  { id: "food", name: "Food & Dining" },
-  { id: "transport", name: "Transportation" },
-  { id: "shopping", name: "Shopping" },
-  { id: "entertainment", name: "Entertainment" },
-  { id: "utilities", name: "Bills & Utilities" },
-  { id: "health", name: "Health" },
-  { id: "other", name: "Other (Custom)" },
+  { id: "food", name: "Food & Dining", color: "#4ade80" },
+  { id: "transport", name: "Transportation", color: "#60a5fa" },
+  { id: "shopping", name: "Shopping", color: "#f472b6" },
+  { id: "entertainment", name: "Entertainment", color: "#a78bfa" },
+  { id: "utilities", name: "Bills & Utilities", color: "#fbbf24" },
+  { id: "health", name: "Health", color: "#34d399" },
 ]
 
 interface ExpenseInputFormProps {
@@ -29,19 +29,35 @@ interface ExpenseInputFormProps {
 export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMoneySound }: ExpenseInputFormProps) {
   const [newAmount, setNewAmount] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("food")
-  const [customCategory, setCustomCategory] = useState("")
   const [note, setNote] = useState("")
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState("")
-  const [showCustomCategory, setShowCustomCategory] = useState(false)
+  const [categories, setCategories] = useState([...DEFAULT_CATEGORIES])
 
-  // When category changes, check if it's "other" to show custom input
+  // Load custom categories on component mount
   useEffect(() => {
-    setShowCustomCategory(selectedCategory === "other")
-    if (selectedCategory !== "other") {
-      setCustomCategory("")
+    async function loadCustomCategories() {
+      try {
+        const customCategories = await getCustomCategories()
+        if (customCategories && customCategories.length > 0) {
+          // Combine default and custom categories, avoiding duplicates
+          const allCategories = [...DEFAULT_CATEGORIES]
+
+          customCategories.forEach((customCat) => {
+            if (!allCategories.some((cat) => cat.id === customCat.id)) {
+              allCategories.push(customCat)
+            }
+          })
+
+          setCategories(allCategories)
+        }
+      } catch (error) {
+        console.error("Error loading custom categories:", error)
+      }
     }
-  }, [selectedCategory])
+
+    loadCustomCategories()
+  }, [])
 
   const handleAddExpense = async () => {
     const amount = Number.parseFloat(newAmount)
@@ -57,24 +73,20 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
       return
     }
 
-    // Validate custom category if "other" is selected
-    if (selectedCategory === "other" && !customCategory.trim()) {
-      setError("Please enter a custom category name")
+    if (!selectedCategory) {
+      setError("Please select a category")
       return
     }
 
     setError("")
     setIsAdding(true)
 
-    // Determine the final category to use
-    const finalCategory = selectedCategory === "other" ? customCategory.trim().toLowerCase() : selectedCategory
-
     // Add new expense with current timestamp and unique ID
     const newExpense = {
       id: crypto.randomUUID(),
       amount,
       timestamp: Date.now(),
-      category: finalCategory,
+      category: selectedCategory,
       note: note.trim() || undefined,
     }
 
@@ -85,22 +97,19 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
       // Reset form
       setNewAmount("")
       setNote("")
-      if (selectedCategory === "other") {
-        setCustomCategory("")
-      }
 
       // Play money sound
       playMoneySound()
 
       // Log expense added event
-      logUserActivity(`expense_added_${finalCategory}`)
+      logUserActivity(`expense_added_${selectedCategory}`)
 
       // Notify parent component
       onExpenseAdded()
 
       // Show toast notification with Sonner
       toast(`${amount.toFixed(2)} added`, {
-        description: `Added to ${selectedCategory === "other" ? customCategory : selectedCategory}`,
+        description: `Added to ${categories.find((c) => c.id === selectedCategory)?.name || selectedCategory}`,
         position: "bottom-center",
         icon: <span className="text-xl">🫰🏾</span>,
       })
@@ -110,6 +119,20 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
     } finally {
       setTimeout(() => setIsAdding(false), 300)
     }
+  }
+
+  // Handle new category added
+  const handleCategoryAdded = (newCategory: { id: string; name: string; color: string }) => {
+    setCategories((prev) => {
+      // Check if category already exists
+      if (prev.some((cat) => cat.id === newCategory.id)) {
+        return prev
+      }
+      return [...prev, newCategory]
+    })
+
+    // Select the newly added category
+    setSelectedCategory(newCategory.id)
   }
 
   return (
@@ -141,10 +164,13 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
               <SelectTrigger className={`rounded-xl ${currentTheme.input.background} ${currentTheme.input.border}`}>
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
-              <SelectContent>
-                {DEFAULT_CATEGORIES.map((category) => (
+              <SelectContent className="max-h-[200px] overflow-y-auto">
+                {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
-                    {category.name}
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }}></div>
+                      {category.name}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -160,27 +186,30 @@ export default function ExpenseInputForm({ currentTheme, onExpenseAdded, playMon
           </Button>
         </div>
 
-        {showCustomCategory && (
+        <div className="flex justify-between items-center">
           <Input
             type="text"
-            placeholder="Enter custom category name"
-            value={customCategory}
-            onChange={(e) => setCustomCategory(e.target.value)}
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
             className={`rounded-xl ${currentTheme.input.background} ${
               currentTheme.input.border
             } ${currentTheme.input.focus} ${currentTheme.input.text} ${currentTheme.input.placeholder}`}
           />
-        )}
 
-        <Input
-          type="text"
-          placeholder="Note (optional)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className={`rounded-xl ${currentTheme.input.background} ${
-            currentTheme.input.border
-          } ${currentTheme.input.focus} ${currentTheme.input.text} ${currentTheme.input.placeholder}`}
-        />
+          <div className="ml-2">
+            <AddCategoryDialog
+              onCategoryAdded={handleCategoryAdded}
+              currentTheme={currentTheme}
+              trigger={
+                <Button variant="outline" size="sm" className="h-10 rounded-xl">
+                  <PlusCircle className="w-4 h-4 mr-1" />
+                  New
+                </Button>
+              }
+            />
+          </div>
+        </div>
       </div>
 
       {error && <p className="text-red-500 text-sm mt-2 animate-pulse">{error}</p>}

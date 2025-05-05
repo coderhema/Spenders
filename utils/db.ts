@@ -283,6 +283,57 @@ export const getCategories = async (): Promise<any[]> => {
   }
 }
 
+// Add this function to get custom categories
+export const getCustomCategories = async (): Promise<any[]> => {
+  try {
+    const db = await openDB()
+    const transaction = db.transaction(CATEGORIES_STORE, "readonly")
+    const store = transaction.objectStore(CATEGORIES_STORE)
+    const request = store.getAll()
+
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => {
+        db.close()
+        resolve(request.result)
+      }
+
+      request.onerror = () => {
+        console.error("Error getting custom categories:", request.error)
+        reject(request.error)
+      }
+    })
+  } catch (error) {
+    console.error("Error retrieving custom categories:", error)
+    return []
+  }
+}
+
+// Add this function to add a custom category
+export const addCustomCategory = async (category: { id: string; name: string; color: string }): Promise<void> => {
+  try {
+    const db = await openDB()
+    const transaction = db.transaction(CATEGORIES_STORE, "readwrite")
+    const store = transaction.objectStore(CATEGORIES_STORE)
+
+    store.add(category)
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => {
+        db.close()
+        resolve()
+      }
+
+      transaction.onerror = () => {
+        console.error("Transaction error:", transaction.error)
+        reject(transaction.error)
+      }
+    })
+  } catch (error) {
+    console.error("Error adding custom category:", error)
+    throw error
+  }
+}
+
 // Delete an expense by ID
 export const deleteExpense = async (id: string): Promise<void> => {
   try {

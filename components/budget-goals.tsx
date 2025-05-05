@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { PlusCircle, Edit, Trash2, AlertTriangle } from "lucide-react"
-import { getBudgetGoals, saveBudgetGoal, deleteBudgetGoal } from "@/utils/db"
+import { getBudgetGoals, saveBudgetGoal, deleteBudgetGoal, getCustomCategories } from "@/utils/db"
 import { getExpensesByPeriod } from "@/utils/db"
 import { formatCurrency } from "@/utils/format-utils"
 import {
@@ -28,16 +28,16 @@ import {
   getBudgetStatusColor,
   getBudgetStatusTextColor,
 } from "@/utils/budget-model"
+import AddCategoryDialog from "./add-category-dialog"
 
 // Default categories
 const DEFAULT_CATEGORIES = [
-  { id: "food", name: "Food & Dining" },
-  { id: "transport", name: "Transportation" },
-  { id: "shopping", name: "Shopping" },
-  { id: "entertainment", name: "Entertainment" },
-  { id: "utilities", name: "Bills & Utilities" },
-  { id: "health", name: "Health" },
-  { id: "other", name: "Other (Custom)" },
+  { id: "food", name: "Food & Dining", color: "#4ade80" },
+  { id: "transport", name: "Transportation", color: "#60a5fa" },
+  { id: "shopping", name: "Shopping", color: "#f472b6" },
+  { id: "entertainment", name: "Entertainment", color: "#a78bfa" },
+  { id: "utilities", name: "Bills & Utilities", color: "#fbbf24" },
+  { id: "health", name: "Health", color: "#34d399" },
 ]
 
 interface BudgetGoalsProps {
@@ -51,26 +51,38 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
   const [loading, setLoading] = useState<boolean>(true)
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false)
   const [editingGoal, setEditingGoal] = useState<BudgetGoal | null>(null)
+  const [categories, setCategories] = useState([...DEFAULT_CATEGORIES])
 
   // Form state
   const [category, setCategory] = useState<string>("food")
-  const [customCategory, setCustomCategory] = useState<string>("")
   const [amount, setAmount] = useState<string>("")
   const [period, setPeriod] = useState<BudgetPeriod>("monthly")
   const [formError, setFormError] = useState<string>("")
-  const [showCustomCategory, setShowCustomCategory] = useState<boolean>(false)
 
   useEffect(() => {
     loadBudgetGoals()
+    loadCategories()
   }, [])
 
-  // When category changes, check if it's "other" to show custom input
-  useEffect(() => {
-    setShowCustomCategory(category === "other")
-    if (category !== "other") {
-      setCustomCategory("")
+  const loadCategories = async () => {
+    try {
+      const customCategories = await getCustomCategories()
+      if (customCategories && customCategories.length > 0) {
+        // Combine default and custom categories, avoiding duplicates
+        const allCategories = [...DEFAULT_CATEGORIES]
+
+        customCategories.forEach((customCat) => {
+          if (!allCategories.some((cat) => cat.id === customCat.id)) {
+            allCategories.push(customCat)
+          }
+        })
+
+        setCategories(allCategories)
+      }
+    } catch (error) {
+      console.error("Error loading custom categories:", error)
     }
-  }, [category])
+  }
 
   const loadBudgetGoals = async () => {
     try {
@@ -149,12 +161,6 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
       return
     }
 
-    // Validate custom category if "other" is selected
-    if (category === "other" && !customCategory.trim()) {
-      setFormError("Please enter a custom category name")
-      return
-    }
-
     const amountValue = Number.parseFloat(amount)
     if (isNaN(amountValue) || amountValue <= 0) {
       setFormError("Please enter a valid amount")
@@ -168,22 +174,19 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
     setFormError("")
 
-    // Determine the final category to use
-    const finalCategory = category === "other" ? customCategory.trim().toLowerCase() : category
-
     try {
       // Create or update budget goal
       const goal: BudgetGoal = editingGoal
         ? {
             ...editingGoal,
-            category: finalCategory,
+            category: category,
             amount: amountValue,
             period,
             updatedAt: Date.now(),
           }
         : {
             id: crypto.randomUUID(),
-            category: finalCategory,
+            category: category,
             amount: amountValue,
             period,
             createdAt: Date.now(),
@@ -208,20 +211,7 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
 
   const handleEdit = (goal: BudgetGoal) => {
     setEditingGoal(goal)
-
-    // Check if this is a custom category
-    const isCustomCategory = !DEFAULT_CATEGORIES.some((cat) => cat.id === goal.category && cat.id !== "other")
-
-    if (isCustomCategory) {
-      setCategory("other")
-      setCustomCategory(goal.category)
-      setShowCustomCategory(true)
-    } else {
-      setCategory(goal.category)
-      setCustomCategory("")
-      setShowCustomCategory(false)
-    }
-
+    setCategory(goal.category)
     setAmount(goal.amount.toString())
     setPeriod(goal.period)
     setIsDialogOpen(true)
@@ -243,16 +233,19 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
   const resetForm = () => {
     setEditingGoal(null)
     setCategory("food")
-    setCustomCategory("")
-    setShowCustomCategory(false)
     setAmount("")
     setPeriod("monthly")
     setFormError("")
   }
 
   const getCategoryName = (categoryId: string) => {
-    const category = DEFAULT_CATEGORIES.find((c) => c.id === categoryId)
+    const category = categories.find((c) => c.id === categoryId)
     return category ? category.name : categoryId.charAt(0).toUpperCase() + categoryId.slice(1)
+  }
+
+  const getCategoryColor = (categoryId: string) => {
+    const category = categories.find((c) => c.id === categoryId)
+    return category?.color || "#94a3b8" // Default to slate gray if not found
   }
 
   const getPeriodName = (period: BudgetPeriod) => {
@@ -266,6 +259,20 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
       default:
         return period
     }
+  }
+
+  // Handle new category added
+  const handleCategoryAdded = (newCategory: { id: string; name: string; color: string }) => {
+    setCategories((prev) => {
+      // Check if category already exists
+      if (prev.some((cat) => cat.id === newCategory.id)) {
+        return prev
+      }
+      return [...prev, newCategory]
+    })
+
+    // Select the newly added category
+    setCategory(newCategory.id)
   }
 
   if (loading) {
@@ -283,78 +290,76 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
     <Card className={`${currentTheme.card} rounded-[24px]`}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className={`text-lg font-semibold ${currentTheme.text.primary}`}>Budget Goals</CardTitle>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => resetForm()} className={`rounded-full ${currentTheme.button} text-white`} size="sm">
-              <PlusCircle className="w-4 h-4 mr-1" />
-              Add Goal
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{editingGoal ? "Edit Budget Goal" : "Create Budget Goal"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEFAULT_CATEGORIES.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {showCustomCategory && (
+        <div className="flex gap-2">
+          <AddCategoryDialog onCategoryAdded={handleCategoryAdded} currentTheme={currentTheme} />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                onClick={() => resetForm()}
+                className={`rounded-full ${currentTheme.button} text-white`}
+                size="sm"
+              >
+                <PlusCircle className="w-4 h-4 mr-1" />
+                Add Goal
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>{editingGoal ? "Edit Budget Goal" : "Create Budget Goal"}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Custom Category Name</label>
+                  <label className="text-sm font-medium">Category</label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: cat.color }}></div>
+                            {cat.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Amount</label>
                   <Input
-                    type="text"
-                    placeholder="Enter custom category name"
-                    value={customCategory}
-                    onChange={(e) => setCustomCategory(e.target.value)}
+                    type="number"
+                    placeholder="Enter amount"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                   />
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Amount</label>
-                <Input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Period</label>
+                  <Select value={period} onValueChange={(value) => setPeriod(value as BudgetPeriod)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formError && <p className="text-red-500 text-sm">{formError}</p>}
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSubmit}>Save</Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Period</label>
-                <Select value={period} onValueChange={(value) => setPeriod(value as BudgetPeriod)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {formError && <p className="text-red-500 text-sm">{formError}</p>}
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSubmit}>Save</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {budgetStatuses.length === 0 ? (
@@ -363,13 +368,19 @@ export default function BudgetGoals({ currentTheme, currentCurrency }: BudgetGoa
             <p className="text-sm mt-2">Add a budget goal to track your spending</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2">
             {budgetStatuses.map((status) => (
               <div key={status.id} className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{getCategoryName(status.category)}</h3>
-                    <p className="text-sm text-gray-500">{getPeriodName(status.period)} Budget</p>
+                  <div className="flex items-center">
+                    <div
+                      className="w-3 h-3 rounded-full mr-2"
+                      style={{ backgroundColor: getCategoryColor(status.category) }}
+                    ></div>
+                    <div>
+                      <h3 className="font-medium">{getCategoryName(status.category)}</h3>
+                      <p className="text-sm text-gray-500">{getPeriodName(status.period)} Budget</p>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Button
