@@ -28,6 +28,7 @@ export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
   })
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [daysUsed, setDaysUsed] = useState<number>(0)
+  const [locationError, setLocationError] = useState<boolean>(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -64,13 +65,25 @@ export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
         // Get saved country from settings first
         const savedCountry = await getSetting("userCountry", null)
 
-        if (savedCountry) {
+        if (savedCountry && savedCountry.code && savedCountry.name) {
           setUserCountry(savedCountry)
         } else {
-          // Fetch user's country based on IP using server action
-          const countryInfo = await getUserCountryFromIP()
-          setUserCountry(countryInfo)
-          await saveSetting("userCountry", countryInfo)
+          try {
+            // Fetch user's country based on IP using server action
+            const countryInfo = await getUserCountryFromIP()
+
+            if (countryInfo.code === "UN") {
+              // If we couldn't detect the country, show a message
+              setLocationError(true)
+            }
+
+            setUserCountry(countryInfo)
+            await saveSetting("userCountry", countryInfo)
+          } catch (error) {
+            console.error("Error fetching country:", error)
+            setLocationError(true)
+            // Keep the default "Detecting location..." state
+          }
         }
       } catch (err) {
         console.error("Error fetching user data:", err)
@@ -134,7 +147,11 @@ export default function UsageAnalytics({ currentTheme }: UsageAnalyticsProps) {
               </span>
               <div>
                 <p className="font-medium text-lg">{userCountry.name}</p>
-                <p className="text-xs text-gray-500">Detected automatically</p>
+                {locationError ? (
+                  <p className="text-xs text-amber-600">Location detection limited</p>
+                ) : (
+                  <p className="text-xs text-gray-500">Detected automatically</p>
+                )}
               </div>
             </div>
           </div>

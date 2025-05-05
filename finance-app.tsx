@@ -600,11 +600,12 @@ export default function FinanceApp() {
       })
   }
 
+  // Update the loading screen text if needed
   if (isLoading) {
     return (
       <div className="min-h-screen bg-emerald-500 flex items-center justify-center">
         <div className="bg-white p-8 rounded-[32px] shadow-lg flex flex-col items-center">
-          <div className="text-4xl mb-4">🫰🏾</div>
+          <img src="/images/coins-logo.png" alt="Spenders Logo" className="h-16 w-auto mb-4" />
           <p className="text-emerald-700 text-xl font-medium">Loading your expenses...</p>
         </div>
       </div>
@@ -622,8 +623,8 @@ export default function FinanceApp() {
     >
       <div className="w-full max-w-lg">
         <div className="flex justify-between items-center mb-4">
-          <div className="text-4xl pl-2" aria-label="Pinched fingers emoji logo">
-            🫰🏾
+          <div className="pl-2" aria-label="Coins logo">
+            <img src="/images/coins-logo.png" alt="Spenders Logo" className="h-12 w-auto" />
           </div>
           <div className="flex gap-2">
             <Button

@@ -20,10 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link
-          rel="icon"
-          href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23047857%22 /><text y=%2250%22 x=%2250%22 dominantBaseline=%22middle%22 textAnchor=%22middle%22 fontSize=%2260%22>🫰🏾</text></svg>"
-        />
+        <link rel="icon" href="/images/coins-logo.png" type="image/png" />
         <title>Spenders | Track Your Expenses</title>
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
